@@ -41,6 +41,8 @@ const
   SVCZ_SZ_QUAD   = SizeOf(TSVCZQuad);
   SVCZ_SZ_NATIVE = SizeOf(TSVCZNative);
 
+Function SVCZ_MinNum(A,B: TSVCZNumber): TSVCZNumber;{$IFDEF CanInline} inline;{$ENDIF}
+
 Function SVCZ_ByteParity(Value: TSVCZByte): Boolean;
 Function SVCZ_WordParity(Value: TSVCZWord): Boolean;
 
@@ -49,6 +51,14 @@ Function SVCZ_BoolToByte(Val: Boolean): TSVCZByte;{$IFDEF CanInline} inline;{$EN
 Function SVCZ_ValueBytes(IntSize: TSVCZIntSize): TSVCZNumber;
 
 implementation
+
+Function SVCZ_MinNum(A,B: TSVCZNumber): TSVCZNumber;
+begin
+If A > B then Result := B
+  else Result := A;
+end;
+
+//------------------------------------------------------------------------------
 
 Function SVCZ_ByteParity(Value: TSVCZByte): Boolean;
 begin

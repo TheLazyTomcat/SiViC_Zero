@@ -9,6 +9,8 @@ uses
   SVCZ_Common;
 
 type
+  TSVCZMemoryAccessEvent = procedure(Sender: TObject; Address: TSVCZNative) of object;
+
   TSVCZMemory = class(TObject)
   private
     fMemory:  Pointer;
@@ -71,13 +73,11 @@ end;
 //------------------------------------------------------------------------------
 
 Function TSVCZMemory.FetchMemory(Address,Size: TSVCZNative; out Buffer): TSVCZNative;
-var
-  MemTop: TMemSize;
 begin
 If IsValidArea(Address,Size) then
   begin
+    Result := Size;  
     Move(AddrPtr(Address)^,Buffer,Size);
-    Result := Size;
   end
 else
   begin

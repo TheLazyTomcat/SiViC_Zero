@@ -60,11 +60,20 @@ const
 
 Function SVCZ_ExtractRegIndex(Value: TSVCZByte): TSVCZRegisterIndex;{$IFDEF CanInline} inline;{$ENDIF}
 
+Function SVCZ_PutIntIdx(FLAGS: TSVCZRegister; InterruptIndex: TSVCZNumber): TSVCZRegister;{$IFDEF CanInline} inline;{$ENDIF}
+
 implementation
 
 Function SVCZ_ExtractRegIndex(Value: TSVCZByte): TSVCZRegisterIndex;
 begin
 Result := Value and $F;
+end;
+
+// -----------------------------------------------------------------------------
+
+Function SVCZ_PutIntIdx(FLAGS: TSVCZRegister; InterruptIndex: TSVCZNumber): TSVCZRegister;
+begin
+Result := (FLAGS and $C0FF) or ((InterruptIndex and $3F) shl 8);
 end;
 
 end.
