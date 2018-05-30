@@ -57,7 +57,7 @@ const
     device not available   |  after instruction    |  port index
     invalid argument       |  after instruction    |  argument value
     code alignment         |  start of instruction |  0
-    double fault           |  after instruction    |  0
+    double fault           |  depends on fault     |  0
   ----------------------------------------------------------------------------
 
   IRQ-invoked interrupts - return address points to last IP, data contains
@@ -82,6 +82,7 @@ type
   // interrupt vector
   TSVCZInterruptHandler = record
     HandlerAddr:  TSVCZNative;
+    Counter:      Integer;
   end;
 
   TSVCZInterruptHandlers = array[TSVCZInterruptIndex] of TSVCZInterruptHandler;

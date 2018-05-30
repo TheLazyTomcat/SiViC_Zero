@@ -306,7 +306,44 @@ end;
 procedure TSVCZProcessor.DispatchInterrupt(InterruptIndex: TSVCZInterruptIndex; Data: TSVCZNative = 0);
 begin
 try
-  {$message 'implement'}
+  If GetFlag(SVCZ_REG_FLAGS_INTERRUPTS) or (InterruptIndex <= SVCZ_INT_IDX_MAXEXC) and
+    (fInterruptHandlers[InterruptIndex].HandlerAddr <> 0) then
+    begin
+      // interrupt enabled or exception, interrupt handler assigned (not 0)
+      If (fInterruptHandlers[InterruptIndex].HandlerAddr and 1) = 0 then
+        begin
+          // handler is valid, check whether it can be called
+          If (fInterruptHandlers[InterruptIndex].Counter <= 0) or not SVCZ_IsIRQ(InterruptIndex) then
+            begin
+              // check stack pointer alignment
+              If (fRegisters.GP[REG_SP] and 1) = 0 then
+                begin
+                  // stack is aligned, good to go...
+                  StackPUSH(fRegisters.FLAGS);
+                  StackPUSH(Data);
+                  StackPUSH(fRegisters.IP);
+                  Inc(fInterruptHandlers[InterruptIndex].Counter);
+                  ClearFlag(SVCZ_REG_FLAGS_INTERRUPTS);
+                  SVCZ_FLAGSPutIntIdx(fRegisters.FLAGS,InterruptIndex);
+                  fRegisters.IP := fInterruptHandlers[InterruptIndex].HandlerAddr;
+                end
+              {
+                dispatching an interrupt with unaligned stack would result
+                in infinite exception chain (memory alignment exception),
+                so a tripple fault is raised instead
+              }
+              else raise ESVCZFatalInternalException.Create('TSVCZProcessor.DispatchInterrupt: Triple fault (stack not aligned).');
+            end;
+        end
+      else
+        begin
+          // handler is at invalid address
+          If InterruptIndex <> SVCZ_EXCEPTION_DOUBLEFAULT then
+            DispatchInterrupt(SVCZ_EXCEPTION_DOUBLEFAULT)
+          else
+            raise ESVCZFatalInternalException.Create('TSVCZProcessor.DispatchInterrupt: Triple fault (invalid handler address).');
+        end;
+    end;
 except
   on E: Exception do
     begin
