@@ -15,8 +15,7 @@ uses
   SVCZ_IO;
 
 type
-  TSVCZProcessorState = (psUninitialized,psInitialized,psRunning,psHalted,
-                         psReleased,psWaiting,psSynchronizing,psFailed);
+  TSVCZProcessorState = (psRunning,psHalted,psReleased,psWaiting,psSynchronizing,psFailed);
 
   // processor (system) information
   TSVCZProcessorInfoPage = TSVCZNative;
@@ -81,7 +80,7 @@ type
     Function GetArgVal(ArgIndex: Integer): TSVCZNative; virtual;
     Function GetArgPtr(ArgIndex: Integer): Pointer; virtual;
     // execution engine
-    procedure InvalidateInstructionData; virtual;
+    procedure InvalidateInstructionInfo; virtual;
     procedure ExecuteNextInstruction; virtual;
     procedure InstructionFetch; virtual;
     procedure InstructionIssue; virtual;
@@ -102,22 +101,29 @@ type
     procedure InstructionSelect_G7; virtual;
   public
     constructor Create(Memory: TSVCZMemory);
-    destructor Destroy; override; 
-    //procedure ExecuteInstruction(OPCode: TSVCZInstructionOPCode; Data: TSVCZInstructionData); virtual;
-    //Function Run(InstructionCount: Integer = 1): Integer; virtual;
+    destructor Destroy; override;
   {$IFDEF SVC_Debug}
-    // for debugging purposes...
-    property Memory: TSVCZMemory read fMemory;
-    property Registers: TSVCZRegisters read fRegisters;
-    property InterruptHandlers: TSVCZInterruptHandlers read fInterruptHandlers;
-    property Ports: TSVCZPorts read fPorts;
+    procedure ExecuteInstruction(OPCode: TSVCZInstructionOPCode; Data: TSVCZInstructionData; AffectIP: Boolean = False); virtual;
   {$ENDIF SVC_Debug}
+    procedure EndSynchronization(Sender: TObject); virtual;
+    procedure InterruptRequest(InterruptIndex: TSVCZInterruptIndex; Data: TSVCZNative = 0); virtual;
+    Function DeviceConnected(PortIndex: TSVCZPortIndex): Boolean; virtual;
+    procedure ConnectDevice(PortIndex: TSVCZPortIndex; InHandler,OutHandler: TSVCZPortEvent); virtual;
+    procedure DisconnectDevice(PortIndex: TSVCZPortIndex); virtual;
+    procedure Restart; virtual;
+    procedure Reset; virtual;
+    Function Run(InstructionCount: Integer = 1): Integer; virtual;    
     property State: TSVCZProcessorState read fState;
     property ExecutionCount: UInt64 read fExecutionCount;
     property FaultClass: String read fFaultClass;
     property FaultMessage: String read fFaultMessage;
     property OnSynchronization: TNotifyEvent read fOnSynchronization write fOnSynchronization;
   {$IFDEF SVC_Debug}
+    // for debugging purposes...
+    property Memory: TSVCZMemory read fMemory;
+    property Registers: TSVCZRegisters read fRegisters;
+    property InterruptHandlers: TSVCZInterruptHandlers read fInterruptHandlers;
+    property Ports: TSVCZPorts read fPorts;
     property OnBeforeInstruction: TNotifyEvent read fOnBeforeInstruction write fOnBeforeInstruction;
     property OnAfterInstruction: TNotifyEvent read fOnAfterInstruction write fOnAfterInstruction;
     property OnMemoryRead: TSVCZMemoryAccessEvent read fOnMemoryRead write fOnMemoryRead;
@@ -400,7 +406,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TSVCZProcessor.InvalidateInstructionData;
+procedure TSVCZProcessor.InvalidateInstructionInfo;
 begin
 FillChar(fCurrentInstruction,SizeOf(TSVCZInstructionInfo),0);
 end;
@@ -417,7 +423,7 @@ try
     on E: Exception do HandleException(E);
   end;
 finally
-  InvalidateInstructionData;
+  InvalidateInstructionInfo;
 end;
 end;
 
@@ -660,12 +666,13 @@ end;
 procedure TSVCZProcessor.Initialize;
 begin
 fExecutionCount := 0;
-fState := psUninitialized;
+fState := psRunning;
 FillChar(fMemory.Memory^,fMemory.Size,0);
 FillChar(fRegisters,SizeOf(TSVCZRegisters),0);
 FillChar(fInterruptHandlers,SizeOf(TSVCZInterruptHandlers),0);
 FillChar(fPorts,SizeOf(TSVCZPorts),0);
-InvalidateInstructionData;
+InvalidateInstructionInfo;
+fOnSynchronization := EndSynchronization;
 end;
 
 //------------------------------------------------------------------------------
@@ -691,5 +698,139 @@ begin
 inherited;
 Finalize;
 end;
+
+//------------------------------------------------------------------------------
+
+{$IFDEF SVC_Debug}
+
+procedure TSVCZProcessor.ExecuteInstruction(OPCode: TSVCZInstructionOPCode; Data: TSVCZInstructionData; AffectIP: Boolean = False);
+var
+  InstrPtr: TSVCZNative;
+begin
+InstrPtr := fRegisters.IP;
+try
+  // fetch
+  fCurrentInstruction.StartAddr := fRegisters.IP;
+  fCurrentInstruction.OPCode := OPCode;
+  fCurrentInstruction.Data := Data;
+  AdvanceIP(SVCZ_SZ_NATIVE);
+  If SVCZ_GetInstrLoadHint(OPCode) then
+    AdvanceIP(SVCZ_SZ_NATIVE);
+  try
+    InstructionIssue;
+  except
+    on E: Exception do HandleException(E);
+  end;
+finally
+  InvalidateInstructionInfo;
+  If not AffectIP then
+    fRegisters.IP := InstrPtr;
+end;
+end;
+
+{$ENDIF SVC_Debug}
+
+//------------------------------------------------------------------------------
+
+procedure TSVCZProcessor.EndSynchronization(Sender: TObject);
+begin
+If fState = psSynchronizing then
+  fState := psRunning;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TSVCZProcessor.InterruptRequest(InterruptIndex: TSVCZInterruptIndex; Data: TSVCZNative = 0);
+begin
+If SVCZ_IsIRQ(InterruptIndex and $3F) then
+  begin
+    DispatchInterrupt(InterruptIndex and $3F,Data);
+    If fState = psWaiting then
+      fState := psRunning;
+  end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function TSVCZProcessor.DeviceConnected(PortIndex: TSVCZPortIndex): Boolean;
+begin
+Result := fPorts[PortIndex and $F].Connected;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TSVCZProcessor.ConnectDevice(PortIndex: TSVCZPortIndex; InHandler,OutHandler: TSVCZPortEvent);
+begin
+fPorts[PortIndex and $F].InHandler := InHandler;
+fPorts[PortIndex and $F].OutHandler := OutHandler;
+fPorts[PortIndex and $F].Connected := True;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TSVCZProcessor.DisconnectDevice(PortIndex: TSVCZPortIndex);
+begin
+fPorts[PortIndex and $F].InHandler := nil;
+fPorts[PortIndex and $F].OutHandler := nil;
+fPorts[PortIndex and $F].Connected := False;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TSVCZProcessor.Restart;
+var
+  i:  Integer;
+begin
+fExecutionCount := 0;
+fFaultClass := '';
+fFaultMessage := '';
+// init registers
+FillChar(fRegisters,SizeOf(TSVCZRegisters),0);
+// init port data (not handlers)
+For i := Low(fPorts) to High(fPorts) do
+  fPorts[i].Data := 0;
+// init current instruction info  
+InvalidateInstructionInfo;
+// init state
+fState := psRunning;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TSVCZProcessor.Reset;
+begin
+// clear ports
+FillChar(fPorts,SizeOf(fPorts),0);
+// clear memory
+FillChar(fMemory.Memory^,fMemory.Size,0);
+// init interrupt handlers
+FillChar(fInterruptHandlers,SizeOf(TSVCZInterruptHandlers),0);
+// init state
+Restart;
+end;
+
+//------------------------------------------------------------------------------
+
+Function TSVCZProcessor.Run(InstructionCount: Integer = 1): Integer;
+begin
+Result := 0;
+If InstructionCount > 0 then
+  while (InstructionCount > 0) and (fState = psRunning) do
+    begin
+      ExecuteNextInstruction;
+      Dec(InstructionCount);
+      Inc(Result);
+    end
+else
+  while fState = psRunning do
+    begin
+      ExecuteNextInstruction;
+      Inc(Result);
+    end;
+If fState in [psReleased,psSynchronizing] then
+  fState := psRunning;
+end;
+
+
 
 end.
