@@ -41,12 +41,13 @@ const
   SVCZ_SZ_QUAD   = SizeOf(TSVCZQuad);
   SVCZ_SZ_NATIVE = SizeOf(TSVCZNative);
 
+  SVCZ_SIGN_MASK_NATIVE = TSVCZNative($8000); 
+
 Function SVCZ_MinNum(A,B: TSVCZNumber): TSVCZNumber;{$IFDEF CanInline} inline;{$ENDIF}
 
-Function SVCZ_ByteParity(Value: TSVCZByte): Boolean;
-Function SVCZ_WordParity(Value: TSVCZWord): Boolean;
+Function SVCZ_Parity(Value: TSVCZNative): Boolean;
 
-Function SVCZ_BoolToByte(Val: Boolean): TSVCZByte;{$IFDEF CanInline} inline;{$ENDIF}
+Function SVCZ_BoolToNum(Val: Boolean): TSVCZNumber;{$IFDEF CanInline} inline;{$ENDIF}
 
 Function SVCZ_ValueBytes(IntSize: TSVCZIntSize): TSVCZNumber;
 
@@ -60,17 +61,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function SVCZ_ByteParity(Value: TSVCZByte): Boolean;
-begin
-Value := Value xor (Value shr 4);
-Value := Value xor (Value shr 2);
-Value := Value xor (Value shr 1);
-Result := (Value and 1) = 0; 
-end;
-
-//------------------------------------------------------------------------------
-
-Function SVCZ_WordParity(Value: TSVCZWord): Boolean;
+Function SVCZ_Parity(Value: TSVCZNative): Boolean;
 begin
 Value := Value xor (Value shr 8);
 Value := Value xor (Value shr 4);
@@ -81,7 +72,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function SVCZ_BoolToByte(Val: Boolean): TSVCZByte;
+Function SVCZ_BoolToNum(Val: Boolean): TSVCZNumber;
 begin
 If Val then Result := 1
   else Result := 0;

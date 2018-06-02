@@ -47,6 +47,7 @@ type
     procedure Initialize; virtual;
     procedure Finalize; virtual;
     // processor info engine
+    Function PutIntoMemory(Address: TSVCZNative; Value: UInt64): TSVCZProcessorInfoData; virtual;
     Function GetInfoPage(Page: TSVCZProcessorInfoPage; Param: TSVCZProcessorInfoData): TSVCZProcessorInfoData; virtual;
     // memory access
   {$IFDEF SVC_Debug}
@@ -89,6 +90,7 @@ type
     // instruction decoding
     procedure ArgumentsDecode(OPCodeParam: TSVCZInstructionArgumentType; ArgumentList: array of TSVCZInstructionArgumentType); overload; virtual;
     procedure ArgumentsDecode(OPCodeParam: TSVCZInstructionArgumentType = iatNone); overload; virtual;
+    procedure ArgumentsDecode(ArgumentList: array of TSVCZInstructionArgumentType); overload; virtual;
     procedure InstructionSelectGroup; virtual;
     // select instruction in group
     procedure InstructionSelect_G0; virtual;
@@ -100,6 +102,8 @@ type
     procedure InstructionSelect_G6; virtual;
     procedure InstructionSelect_G7; virtual;
   public
+    class Function GetArchitecture: TSVCZProcessorInfoData; virtual;
+    class Function GetRevision: TSVCZProcessorInfoData; virtual;
     constructor Create(Memory: TSVCZMemory);
     destructor Destroy; override;
   {$IFDEF SVC_Debug}
@@ -132,6 +136,21 @@ type
   end;
 
 implementation
+
+Function TSVCZProcessor.PutIntoMemory(Address: TSVCZNative; Value: UInt64): TSVCZProcessorInfoData;
+begin
+Result := SizeOf(UInt64);
+If fMemory.IsValidArea(Address,SizeOf(UInt64)) then
+  begin
+    UInt64(fMemory.AddrPtr(Address)^) := UInt64(Value);
+  {$IFDEF SVC_Debug}
+    DoMemoryWriteEvent(Address);
+  {$ENDIF SVC_Debug}
+  end
+else raise ESVCZInterruptException.Create(SVCZ_EXCEPTION_MEMORYACCESS,Address);
+end;
+
+//------------------------------------------------------------------------------
 
 Function TSVCZProcessor.GetInfoPage(Page: TSVCZProcessorInfoPage; Param: TSVCZProcessorInfoData): TSVCZProcessorInfoData;
 begin
@@ -389,9 +408,13 @@ end;
 Function TSVCZProcessor.GetArgVal(ArgIndex: Integer): TSVCZNative;
 begin
 If ArgIndex < fCurrentInstruction.ArgCount then
-  Result := fCurrentInstruction.Args[ArgIndex].ArgumentValue
-else
-  raise ESVCZFatalInternalException.CreateFmt('TSVCZProcessor.GetArgVal: Argument index (%d) out of bounds.',[ArgIndex]);
+  begin
+    If ArgIndex < 0 then
+      Result := fCurrentInstruction.ParamArg.ArgumentValue
+    else
+      Result := fCurrentInstruction.Args[ArgIndex].ArgumentValue;
+  end
+else raise ESVCZFatalInternalException.CreateFmt('TSVCZProcessor.GetArgVal: Argument index (%d) out of bounds.',[ArgIndex]);
 end;
 
 //------------------------------------------------------------------------------
@@ -399,9 +422,13 @@ end;
 Function TSVCZProcessor.GetArgPtr(ArgIndex: Integer): Pointer;
 begin
 If ArgIndex < fCurrentInstruction.ArgCount then
-  Result := fCurrentInstruction.Args[ArgIndex].ArgumentPtr
-else
-  raise ESVCZFatalInternalException.CreateFmt('TSVCZProcessor.GetArgVal: Argument index (%d) out of bounds.',[ArgIndex]);
+  begin
+    If ArgIndex < 0 then
+      Result := fCurrentInstruction.ParamArg.ArgumentPtr
+    else
+      Result := fCurrentInstruction.Args[ArgIndex].ArgumentPtr;
+  end
+else raise ESVCZFatalInternalException.CreateFmt('TSVCZProcessor.GetArgVal: Argument index (%d) out of bounds.',[ArgIndex]);
 end;
 
 //------------------------------------------------------------------------------
@@ -492,27 +519,25 @@ var
   ArgsSize: TSVCZNumber;
   DataTemp: TSVCZNative;
 begin
-fCurrentInstruction.ArgCount := Low(fCurrentInstruction.Args);
 // resolve argument from opcode param
 If OPCodeParam <> iatNone then
   with fCurrentInstruction do
     begin
-      Args[ArgCount].ArgumentType := OPCodeParam;
+      ParamArg.ArgumentType := OPCodeParam;
       case OPCodeParam of
         iatIP,
         iatFLAGS:;  // do nothing
         iatIMM4:  begin
-                    Args[ArgCount].ArgumentValue := DecInfo.Param and $F;
-                    Args[ArgCount].ArgumentPtr := Addr(Args[ArgCount].ArgumentValue)
+                    ParamArg.ArgumentValue := DecInfo.Param and $F;
+                    ParamArg.ArgumentPtr := Addr(ParamArg.ArgumentValue);
                   end;
         iatREG:   begin
-                    Args[ArgCount].ArgumentValue := fRegisters.GP[DecInfo.Param and $F];
-                    Args[ArgCount].ArgumentPtr := Addr(fRegisters.GP[DecInfo.Param and $F])
+                    ParamArg.ArgumentValue := fRegisters.GP[DecInfo.Param and $F];
+                    ParamArg.ArgumentPtr := Addr(fRegisters.GP[DecInfo.Param and $F]);
                   end;
       else
         raise ESVCZFatalInternalException.CreateFmt('TSVCZProcessor.ArgumentsDecode: Invalid OC param argument type (%d).',[Ord(OPCodeParam)]);
       end;
-      Inc(fCurrentInstruction.ArgCount);
     end;
 // check whether other arguments can actually fit into instruction data
 ArgsSize := 0;
@@ -521,12 +546,12 @@ For i := Low(ArgumentList) to High(ArgumentList) do
     iatNone,
     iatIP,
     iatFLAGS:;
+    iatREG,
     iatIMM4:  Inc(ArgsSize,4);
-    iatIMM8:  Inc(ArgsSize,8);
-    iatIMM16: Inc(ArgsSize,16);
+    iatIMM8,
     iatREL8:  Inc(ArgsSize,8);
+    iatIMM16,
     iatREL16: Inc(ArgsSize,16);
-    iatREG:   Inc(ArgsSize,4);
   else
     raise ESVCZFatalInternalException.CreateFmt('TSVCZProcessor.ArgumentsDecode: Invalid argument type (%d).',[Ord(ArgumentList[i])]);
   end;
@@ -534,8 +559,9 @@ If ArgsSize > (SVCZ_SZ_NATIVE * 8) then
   raise ESVCZFatalInternalException.Create('TSVCZProcessor.ArgumentsDecode: Arguments cannot fit into instruction data.');
 // the number will be shifted in processing, make copy so original stays unchanged
 DataTemp := fCurrentInstruction.Data;
+fCurrentInstruction.ArgCount := 0;
 // resolve argument list
-For i := fCurrentInstruction.ArgCount to SVCZ_MinNum(High(ArgumentList),SVCZ_INS_MAXDATAARGUMENTS) do
+For i := Low(ArgumentList) to SVCZ_MinNum(High(ArgumentList),High(fCurrentInstruction.Args)) do
   with fCurrentInstruction do
     begin
       Args[ArgCount].ArgumentType := ArgumentList[i];
@@ -564,7 +590,7 @@ For i := fCurrentInstruction.ArgCount to SVCZ_MinNum(High(ArgumentList),SVCZ_INS
                     DataTemp := DataTemp shr 8;
                   end;
         iatREL16: begin
-                    Args[ArgCount].ArgumentValue := DataTemp; 
+                    Args[ArgCount].ArgumentValue := DataTemp;
                     Args[ArgCount].ArgumentPtr := Addr(Args[ArgCount].ArgumentValue);
                     DataTemp := DataTemp shr 16;
                   end;
@@ -577,6 +603,7 @@ For i := fCurrentInstruction.ArgCount to SVCZ_MinNum(High(ArgumentList),SVCZ_INS
         // this error should have been already raised in counting, but better be safe
         raise ESVCZFatalInternalException.CreateFmt('TSVCZProcessor.ArgumentsDecode: Invalid argument type (%d).',[Ord(ArgumentList[i])]);
       end;
+      Inc(ArgCount);
     end;
 end;
 
@@ -585,6 +612,13 @@ end;
 procedure TSVCZProcessor.ArgumentsDecode(OPCodeParam: TSVCZInstructionArgumentType = iatNone);
 begin
 ArgumentsDecode(OPCodeParam,[]);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+procedure TSVCZProcessor.ArgumentsDecode(ArgumentList: array of TSVCZInstructionArgumentType);
+begin
+ArgumentsDecode(iatNone,ArgumentList);
 end;
 
 //------------------------------------------------------------------------------
@@ -684,6 +718,23 @@ end;
 
 //==============================================================================
 
+class Function TSVCZProcessor.GetArchitecture: TSVCZProcessorInfoData;
+begin
+Result := $57C0;  // don't ask
+end;
+
+//------------------------------------------------------------------------------
+
+class Function TSVCZProcessor.GetRevision: TSVCZProcessorInfoData;
+begin
+{$IFDEF FPC}
+Result := 0; // fpc generates warning when not present, delphi generates warning when it is present, yep... 
+{$ENDIF}
+raise Exception.Create('TSVCProcessor.GetRevision: No revision number available');
+end;
+
+//------------------------------------------------------------------------------
+
 constructor TSVCZProcessor.Create(Memory: TSVCZMemory);
 begin
 inherited Create;
@@ -695,8 +746,8 @@ end;
 
 destructor TSVCZProcessor.Destroy;
 begin
-inherited;
 Finalize;
+inherited;
 end;
 
 //------------------------------------------------------------------------------
@@ -830,7 +881,5 @@ else
 If fState in [psReleased,psSynchronizing] then
   fState := psRunning;
 end;
-
-
 
 end.
