@@ -33,6 +33,7 @@ type
     procedure Instruction_2_018; virtual;   // MCOPY      [reg],    [reg],    reg
     procedure Instruction_2_019; virtual;   // MFILL      [reg],    reg,      imm8
     procedure Instruction_2_020; virtual;   // MFILL      [reg],    reg,      reg(8)
+    procedure Instruction_2_021; virtual;   // SETDMA     imm4(2),  [reg],    reg
   end;
 
 implementation
@@ -64,6 +65,7 @@ case fCurrentInstruction.DecInfo.Index of
    018: fCurrentInstruction.Handler := Instruction_2_018;   // MCOPY      [reg],    [reg],    reg
    019: fCurrentInstruction.Handler := Instruction_2_019;   // MFILL      [reg],    reg,      imm8
    020: fCurrentInstruction.Handler := Instruction_2_020;   // MFILL      [reg],    reg,      reg(8)
+   021: fCurrentInstruction.Handler := Instruction_2_021;   // SETDMA     imm4(2),  [reg],    reg
 else
   inherited InstructionSelect_G2;
 end;
@@ -317,6 +319,17 @@ If fMemory.IsValidArea(GetArgVal(0),GetArgVal(1)) then
     FillChar(MemPtr^,GetArgVal(1),GetArgVal(2) and $FF);
   end
 else raise ESVCZInterruptException.Create(SVCZ_INT_IDX_MEMORYACCESSEXCEPTION,GetArgVal(0));
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TSVCZProcessor_0000_G2.Instruction_2_021;   // SETDMA     imm4(2),  [reg],    reg
+begin
+ArgumentsDecode([iatIMM4,iatREG,iatREG]);
+If fMemory.IsValidArea(GetArgVal(1),GetArgVal(2)) then
+  fMemory.SetDMAChannel(GetArgVal(0) and $3,GetArgVal(1),GetArgVal(2))
+else
+  raise ESVCZInterruptException.Create(SVCZ_INT_IDX_MEMORYACCESSEXCEPTION,GetArgVal(1));
 end;
 
 end.
