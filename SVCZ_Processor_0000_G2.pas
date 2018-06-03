@@ -30,6 +30,9 @@ type
     procedure Instruction_2_015; virtual;   // MOVZX      reg,      reg(8)
     procedure Instruction_2_016; virtual;   // MOVSX      reg,      imm8
     procedure Instruction_2_017; virtual;   // MOVSX      reg,      reg(8)
+    procedure Instruction_2_018; virtual;   // MCOPY      [reg],    [reg],    reg
+    procedure Instruction_2_019; virtual;   // MFILL      [reg],    reg,      imm8
+    procedure Instruction_2_020; virtual;   // MFILL      [reg],    reg,      reg(8)
   end;
 
 implementation
@@ -58,6 +61,9 @@ case fCurrentInstruction.DecInfo.Index of
    015: fCurrentInstruction.Handler := Instruction_2_015;   // MOVZX      reg,      reg(8)
    016: fCurrentInstruction.Handler := Instruction_2_016;   // MOVSX      reg,      imm8
    017: fCurrentInstruction.Handler := Instruction_2_017;   // MOVSX      reg,      reg(8)
+   018: fCurrentInstruction.Handler := Instruction_2_018;   // MCOPY      [reg],    [reg],    reg
+   019: fCurrentInstruction.Handler := Instruction_2_019;   // MFILL      [reg],    reg,      imm8
+   020: fCurrentInstruction.Handler := Instruction_2_020;   // MFILL      [reg],    reg,      reg(8)
 else
   inherited InstructionSelect_G2;
 end;
@@ -260,6 +266,57 @@ procedure TSVCZProcessor_0000_G2.Instruction_2_017;   // MOVSX      reg,      re
 begin
 ArgumentsDecode([iatREG,iatREG]);
 TSVCZNative(GetArgPtr(0)^) := TSVCZNative(TSVCZSNative(TSVCZSByte(GetArgVal(1))));
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TSVCZProcessor_0000_G2.Instruction_2_018;   // MCOPY      [reg],    [reg],    reg
+var
+  DstPtr: Pointer;
+  SrcPtr: Pointer;
+begin
+ArgumentsDecode([iatREG,iatREG,iatREG]);
+If fMemory.IsValidArea(GetArgVal(0),GetArgVal(2)) then
+  begin
+    DstPtr := fMemory.AddrPtr(GetArgVal(0));
+    If fMemory.IsValidArea(GetArgVal(1),GetArgVal(2)) then
+      begin
+        SrcPtr := fMemory.AddrPtr(GetArgVal(1));
+        System.Move(SrcPtr^,DstPtr^,GetArgVal(2));
+      end
+    else raise ESVCZInterruptException.Create(SVCZ_INT_IDX_MEMORYACCESSEXCEPTION,GetArgVal(1));
+  end
+else raise ESVCZInterruptException.Create(SVCZ_INT_IDX_MEMORYACCESSEXCEPTION,GetArgVal(0));
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TSVCZProcessor_0000_G2.Instruction_2_019;   // MFILL      [reg],    reg,      imm8
+var
+  MemPtr: Pointer;
+begin
+ArgumentsDecode([iatREG,iatREG,iatIMM8]);
+If fMemory.IsValidArea(GetArgVal(0),GetArgVal(1)) then
+  begin
+    MemPtr := fMemory.AddrPtr(GetArgVal(0));
+    FillChar(MemPtr^,GetArgVal(1),GetArgVal(2));
+  end
+else raise ESVCZInterruptException.Create(SVCZ_INT_IDX_MEMORYACCESSEXCEPTION,GetArgVal(0));
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TSVCZProcessor_0000_G2.Instruction_2_020;   // MFILL      [reg],    reg,      reg(8)
+var
+  MemPtr: Pointer;
+begin
+ArgumentsDecode([iatREG,iatREG,iatREG]);
+If fMemory.IsValidArea(GetArgVal(0),GetArgVal(1)) then
+  begin
+    MemPtr := fMemory.AddrPtr(GetArgVal(0));
+    FillChar(MemPtr^,GetArgVal(1),GetArgVal(2) and $FF);
+  end
+else raise ESVCZInterruptException.Create(SVCZ_INT_IDX_MEMORYACCESSEXCEPTION,GetArgVal(0));
 end;
 
 end.

@@ -22,7 +22,7 @@ type
 
   TSVCZPorts = array[TSVCZPortIndex] of TSVCZPort;
 
-  TSVCZDevice = class(TObject);
+  TSVCZIODevice = class(TObject);
 
 
 implementation

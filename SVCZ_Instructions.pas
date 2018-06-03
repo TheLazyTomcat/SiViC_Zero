@@ -78,7 +78,7 @@ Function SVCZ_GetInstrLoadHint(OPCode: TSVCZInstructionOPCode): Boolean;{$IFDEF 
 procedure SVCZ_InstrDecode(OPCode: TSVCZInstructionOPCode; var DecInfo: TSVCZInstructionDecodedInfo);
 
 Function SVCZ_InstrEncode(Index,Group,Param: TSVCZNumber; LoadHint: Boolean): TSVCZNative;{$IFDEF CanInline} inline;{$ENDIF}
-Function SVCZ_ParamEncode(ArgTypes: array of TSVCZInstructionArgumentType; ArgValues: array of TSVCZNumber): TSVCZNative;
+Function SVCZ_ArgsEncode(ArgTypes: array of TSVCZInstructionArgumentType; ArgValues: array of TSVCZNumber): TSVCZNative;
 
 implementation
 
@@ -131,7 +131,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function SVCZ_ParamEncode(ArgTypes: array of TSVCZInstructionArgumentType; ArgValues: array of TSVCZNumber): TSVCZNative;
+Function SVCZ_ArgsEncode(ArgTypes: array of TSVCZInstructionArgumentType; ArgValues: array of TSVCZNumber): TSVCZNative;
 var
   i:  Integer;
 begin

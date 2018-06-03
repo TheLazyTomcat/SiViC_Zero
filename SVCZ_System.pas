@@ -12,9 +12,9 @@ type
   private
     fMemory:        TSVCZMemory;
     fProcessor:     TSVCZProcessor;
-    fDevices:       array of TSVCZDevice;
+    fDevices:       array of TSVCZIODevice;
     fProcCycleMult: Integer;
-    Function GetDevice(Index: Integer): TSVCZDevice;
+    Function GetDevice(Index: Integer): TSVCZIODevice;
     Function GetDeviceCount: Integer;
   protected
     procedure Initialize; virtual;
@@ -29,7 +29,7 @@ type
     //{$message 'implement'}
     property Memory: TSVCZMemory read fMemory;
     property Processor: TSVCZProcessor read fProcessor;
-    property Devices[Index: Integer]: TSVCZDevice read GetDevice;
+    property Devices[Index: Integer]: TSVCZIODevice read GetDevice;
     property DeviceCount: Integer read GetDeviceCount;
     property ProcessorCycleMultiplier: Integer read fProcCycleMult write fProcCycleMult;
   end;
@@ -40,7 +40,7 @@ uses
   SysUtils,
   SVCZ_Processor_Curr;
 
-Function TSVCZSystem.GetDevice(Index: Integer): TSVCZDevice;
+Function TSVCZSystem.GetDevice(Index: Integer): TSVCZIODevice;
 begin
 If (Index >= Low(fDevices)) and (Index <= High(fDevices)) then
   Result := fDevices[Index]
