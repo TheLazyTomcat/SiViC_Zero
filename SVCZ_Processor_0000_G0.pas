@@ -195,7 +195,7 @@ end;
 procedure TSVCZProcessor_0000_G0.Instruction_0_009;   // INTRET
 begin
 ArgumentsDecode;
-Dec(fInterruptHandlers[SVCZ_FLAGSGetIntIdx(fRegisters.FLAGS)].Counter);
+Dec(fInterrupts[SVCZ_FLAGSGetIntIdx(fRegisters.FLAGS)].Counter);
 fRegisters.IP := StackPOP;
 StackPOP; // discard data
 fRegisters.FLAGS := StackPOP;
@@ -223,7 +223,7 @@ end;
 procedure TSVCZProcessor_0000_G0.Instruction_0_012;   // INTGET     reg,      imm8(6)
 begin
 ArgumentsDecode([iatREG,iatIMM8]);
-TSVCZNative(GetArgPtr(0)^) := fInterruptHandlers[TSVCZInterruptIndex(GetArgVal(1) and $3F)].HandlerAddr;
+TSVCZNative(GetArgPtr(0)^) := fInterrupts[TSVCZInterruptIndex(GetArgVal(1) and $3F)].HandlerAddr;
 end;
 
 //------------------------------------------------------------------------------
@@ -231,7 +231,7 @@ end;
 procedure TSVCZProcessor_0000_G0.Instruction_0_013;   // INTGET     reg,      reg(6)
 begin
 ArgumentsDecode([iatREG,iatREG]);
-TSVCZNative(GetArgPtr(0)^) := fInterruptHandlers[TSVCZInterruptIndex(GetArgVal(1) and $3F)].HandlerAddr;
+TSVCZNative(GetArgPtr(0)^) := fInterrupts[TSVCZInterruptIndex(GetArgVal(1) and $3F)].HandlerAddr;
 end;
 
 //------------------------------------------------------------------------------
@@ -239,7 +239,7 @@ end;
 procedure TSVCZProcessor_0000_G0.Instruction_0_014;   // INTSET     imm8(6),  reg
 begin
 ArgumentsDecode([iatIMM8,iatREG]);
-fInterruptHandlers[TSVCZInterruptIndex(GetArgVal(0) and $3F)].HandlerAddr := GetArgVal(1);
+fInterrupts[TSVCZInterruptIndex(GetArgVal(0) and $3F)].HandlerAddr := GetArgVal(1);
 end;
 
 //------------------------------------------------------------------------------
@@ -247,7 +247,7 @@ end;
 procedure TSVCZProcessor_0000_G0.Instruction_0_015;   // INTSET     reg(6),   reg
 begin
 ArgumentsDecode([iatREG,iatREG]);
-fInterruptHandlers[TSVCZInterruptIndex(GetArgVal(0) and $3F)].HandlerAddr := GetArgVal(1);
+fInterrupts[TSVCZInterruptIndex(GetArgVal(0) and $3F)].HandlerAddr := GetArgVal(1);
 end;
 
 //------------------------------------------------------------------------------
@@ -257,8 +257,8 @@ var
   i:  TSVCZInterruptIndex;
 begin
 ArgumentsDecode(iatREG);
-For i := Low(fInterruptHandlers) to High(fInterruptHandlers) do
-  fInterruptHandlers[i].HandlerAddr := GetArgVal(-1);
+For i := Low(fInterrupts) to High(fInterrupts) do
+  fInterrupts[i].HandlerAddr := GetArgVal(-1);
 end;
 
 //------------------------------------------------------------------------------
@@ -266,7 +266,7 @@ end;
 procedure TSVCZProcessor_0000_G0.Instruction_0_017;   // INTCLR     imm8(6)
 begin
 ArgumentsDecode([iatIMM8]);
-fInterruptHandlers[TSVCZInterruptIndex(GetArgVal(0) and $3F)].HandlerAddr := 0;
+fInterrupts[TSVCZInterruptIndex(GetArgVal(0) and $3F)].HandlerAddr := 0;
 end;
 
 //------------------------------------------------------------------------------
@@ -274,7 +274,7 @@ end;
 procedure TSVCZProcessor_0000_G0.Instruction_0_018;   // INTCLR     *reg(6)
 begin
 ArgumentsDecode(iatREG);
-fInterruptHandlers[TSVCZInterruptIndex(GetArgVal(-1) and $3F)].HandlerAddr := 0;
+fInterrupts[TSVCZInterruptIndex(GetArgVal(-1) and $3F)].HandlerAddr := 0;
 end;
 
 //------------------------------------------------------------------------------

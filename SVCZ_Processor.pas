@@ -37,7 +37,7 @@ type
     fState:               TSVCZProcessorState;
     fMemory:              TSVCZMemory;
     fRegisters:           TSVCZRegisters;
-    fInterruptHandlers:   TSVCZInterruptHandlers;
+    fInterrupts:          TSVCZInterrupts;
     fPorts:               TSVCZPorts;
     // currently processed instruction
     fCurrentInstruction:  TSVCZInstructionInfo;
@@ -114,6 +114,8 @@ type
     Function DeviceConnected(PortIndex: TSVCZPortIndex): Boolean; virtual;
     procedure ConnectDevice(PortIndex: TSVCZPortIndex; InHandler,OutHandler: TSVCZPortEvent); virtual;
     procedure DisconnectDevice(PortIndex: TSVCZPortIndex); virtual;
+    Function PendingIRQ(IRQIndex: TSVCZInterruptIndex): Boolean; virtual;
+    Function MakeIRQ(IRQIndex: TSVCZInterruptIndex): Boolean; virtual;
     procedure Restart; virtual;
     procedure Reset; virtual;
     Function Run(InstructionCount: Integer = 1): Integer; virtual;    
@@ -126,7 +128,7 @@ type
     // for debugging purposes...
     property Memory: TSVCZMemory read fMemory;
     property Registers: TSVCZRegisters read fRegisters;
-    property InterruptHandlers: TSVCZInterruptHandlers read fInterruptHandlers;
+    property Interrupts: TSVCZInterrupts read fInterrupts;
     property Ports: TSVCZPorts read fPorts;
     property OnBeforeInstruction: TNotifyEvent read fOnBeforeInstruction write fOnBeforeInstruction;
     property OnAfterInstruction: TNotifyEvent read fOnAfterInstruction write fOnAfterInstruction;
@@ -332,13 +334,13 @@ procedure TSVCZProcessor.DispatchInterrupt(InterruptIndex: TSVCZInterruptIndex; 
 begin
 try
   If GetFlag(SVCZ_REG_FLAGS_INTERRUPTS) or (InterruptIndex <= SVCZ_INT_IDX_MAXEXC) and
-    (fInterruptHandlers[InterruptIndex].HandlerAddr <> 0) then
+    (fInterrupts[InterruptIndex].HandlerAddr <> 0) then
     begin
       // interrupt enabled or exception, interrupt handler assigned (not 0)
-      If (fInterruptHandlers[InterruptIndex].HandlerAddr and 1) = 0 then
+      If (fInterrupts[InterruptIndex].HandlerAddr and 1) = 0 then
         begin
           // handler is valid, check whether it can be called
-          If (fInterruptHandlers[InterruptIndex].Counter <= 0) or not SVCZ_IsIRQ(InterruptIndex) then
+          If (fInterrupts[InterruptIndex].Counter <= 0) or not SVCZ_IsIRQ(InterruptIndex) then
             begin
               // check stack pointer alignment
               If (fRegisters.GP[REG_SP] and 1) = 0 then
@@ -347,10 +349,10 @@ try
                   StackPUSH(fRegisters.FLAGS);
                   StackPUSH(Data);
                   StackPUSH(fRegisters.IP);
-                  Inc(fInterruptHandlers[InterruptIndex].Counter);
+                  Inc(fInterrupts[InterruptIndex].Counter);
                   ClearFlag(SVCZ_REG_FLAGS_INTERRUPTS);
                   SVCZ_FLAGSPutIntIdx(fRegisters.FLAGS,InterruptIndex);
-                  fRegisters.IP := fInterruptHandlers[InterruptIndex].HandlerAddr;
+                  fRegisters.IP := fInterrupts[InterruptIndex].HandlerAddr;
                 end
               {
                 dispatching an interrupt with unaligned stack would result
@@ -703,7 +705,7 @@ fExecutionCount := 0;
 fState := psRunning;
 FillChar(fMemory.Memory^,fMemory.Size,0);
 FillChar(fRegisters,SizeOf(TSVCZRegisters),0);
-FillChar(fInterruptHandlers,SizeOf(TSVCZInterruptHandlers),0);
+FillChar(fInterrupts,SizeOf(TSVCZInterrupts),0);
 FillChar(fPorts,SizeOf(TSVCZPorts),0);
 InvalidateInstructionInfo;
 fOnSynchronization := EndSynchronization;
@@ -828,6 +830,29 @@ end;
 
 //------------------------------------------------------------------------------
 
+Function TSVCZProcessor.PendingIRQ(IRQIndex: TSVCZInterruptIndex): Boolean;
+begin
+If SVCZ_IsIRQ(IRQIndex) then
+  Result := fInterrupts[IRQIndex].Counter > 0
+else
+  raise Exception.CreateFmt('TSVCZProcessor.PendingIRQ: Interrupt index (%d) is not an IRQ.',[IRQIndex]);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TSVCZProcessor.MakeIRQ(IRQIndex: TSVCZInterruptIndex): Boolean;
+begin
+If SVCZ_IsIRQ(IRQIndex) then
+  begin
+    DispatchInterrupt(IRQIndex,fPorts[SVCZ_IRQToPort(IRQIndex)].Data);
+    If fState = psWaiting then
+      fState := psRunning;  
+  end
+else raise Exception.CreateFmt('TSVCZProcessor.MakeIRQ: Interrupt index (%d) is not an IRQ.',[IRQIndex]);
+end;
+
+//------------------------------------------------------------------------------
+
 procedure TSVCZProcessor.Restart;
 var
   i:  Integer;
@@ -855,7 +880,7 @@ FillChar(fPorts,SizeOf(fPorts),0);
 // clear memory
 FillChar(fMemory.Memory^,fMemory.Size,0);
 // init interrupt handlers
-FillChar(fInterruptHandlers,SizeOf(TSVCZInterruptHandlers),0);
+FillChar(fInterrupts,SizeOf(TSVCZInterrupts),0);
 // init state
 Restart;
 end;
