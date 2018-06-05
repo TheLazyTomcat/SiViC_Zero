@@ -114,8 +114,8 @@ type
     Function DeviceConnected(PortIndex: TSVCZPortIndex): Boolean; virtual;
     procedure ConnectDevice(PortIndex: TSVCZPortIndex; InHandler,OutHandler: TSVCZPortEvent); virtual;
     procedure DisconnectDevice(PortIndex: TSVCZPortIndex); virtual;
-    Function PendingIRQ(IRQIndex: TSVCZInterruptIndex): Boolean; virtual;
-    Function MakeIRQ(IRQIndex: TSVCZInterruptIndex): Boolean; virtual;
+    Function IRQPending(IRQIndex: TSVCZInterruptIndex): Boolean; virtual;
+    Function IRQMake(IRQIndex: TSVCZInterruptIndex): Boolean; virtual;
     procedure Restart; virtual;
     procedure Reset; virtual;
     Function Run(InstructionCount: Integer = 1): Integer; virtual;    
@@ -830,7 +830,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function TSVCZProcessor.PendingIRQ(IRQIndex: TSVCZInterruptIndex): Boolean;
+Function TSVCZProcessor.IRQPending(IRQIndex: TSVCZInterruptIndex): Boolean;
 begin
 If SVCZ_IsIRQ(IRQIndex) then
   Result := fInterrupts[IRQIndex].Counter > 0
@@ -840,13 +840,17 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function TSVCZProcessor.MakeIRQ(IRQIndex: TSVCZInterruptIndex): Boolean;
+Function TSVCZProcessor.IRQMake(IRQIndex: TSVCZInterruptIndex): Boolean;
 begin
 If SVCZ_IsIRQ(IRQIndex) then
   begin
-    DispatchInterrupt(IRQIndex,fPorts[SVCZ_IRQToPort(IRQIndex)].Data);
-    If fState = psWaiting then
-      fState := psRunning;  
+    Result := not IRQPending(IRQIndex);
+    If Result then
+      begin
+        DispatchInterrupt(IRQIndex,fPorts[SVCZ_IRQToPort(IRQIndex)].Data);
+        If fState = psWaiting then
+          fState := psRunning;
+      end;
   end
 else raise Exception.CreateFmt('TSVCZProcessor.MakeIRQ: Interrupt index (%d) is not an IRQ.',[IRQIndex]);
 end;
