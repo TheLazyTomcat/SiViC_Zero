@@ -110,10 +110,7 @@ type
     procedure ExecuteInstruction(OPCode: TSVCZInstructionOPCode; Data: TSVCZInstructionData; AffectIP: Boolean = False); virtual;
   {$ENDIF SVC_Debug}
     procedure EndSynchronization(Sender: TObject); virtual;
-    procedure InterruptRequest(InterruptIndex: TSVCZInterruptIndex; Data: TSVCZNative = 0); virtual;
     Function DeviceConnected(PortIndex: TSVCZPortIndex): Boolean; virtual;
-    procedure ConnectDevice(PortIndex: TSVCZPortIndex; InHandler,OutHandler: TSVCZPortEvent); virtual;
-    procedure DisconnectDevice(PortIndex: TSVCZPortIndex); virtual;
     Function IRQPending(IRQIndex: TSVCZInterruptIndex): Boolean; virtual;
     Function IRQMake(IRQIndex: TSVCZInterruptIndex): Boolean; virtual;
     procedure Restart; virtual;
@@ -385,10 +382,10 @@ end;
 
 procedure TSVCZProcessor.PortUpdated(PortIndex: TSVCZPortIndex);
 begin
-If fPorts[PortIndex].Connected then
+If DeviceConnected(PortIndex) then
   begin
     If Assigned(fPorts[PortIndex].OutHandler) then
-      fPorts[PortIndex].OutHandler(Self,PortIndex,fPorts[PortIndex].Data);
+      fPorts[PortIndex].OutHandler(fPorts[PortIndex].Data);
   end
 else raise ESVCZInterruptException.Create(SVCZ_EXCEPTION_DEVICENOTAVAILABLE,TSVCZNative(PortIndex));
 end;
@@ -397,10 +394,10 @@ end;
 
 procedure TSVCZProcessor.PortRequested(PortIndex: TSVCZPortIndex);
 begin
-If fPorts[PortIndex].Connected then
+If DeviceConnected(PortIndex) then
   begin
     If Assigned(fPorts[PortIndex].OutHandler) then
-      fPorts[PortIndex].InHandler(Self,PortIndex,fPorts[PortIndex].Data);
+      fPorts[PortIndex].InHandler(fPorts[PortIndex].Data);
   end
 else raise ESVCZInterruptException.Create(SVCZ_EXCEPTION_DEVICENOTAVAILABLE,TSVCZNative(PortIndex));
 end;
@@ -793,66 +790,36 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TSVCZProcessor.InterruptRequest(InterruptIndex: TSVCZInterruptIndex; Data: TSVCZNative = 0);
-begin
-If SVCZ_IsIRQ(InterruptIndex and $3F) then
-  begin
-    DispatchInterrupt(InterruptIndex and $3F,Data);
-    If fState = psWaiting then
-      fState := psRunning;
-  end;
-end;
-
-//------------------------------------------------------------------------------
-
 Function TSVCZProcessor.DeviceConnected(PortIndex: TSVCZPortIndex): Boolean;
 begin
-Result := fPorts[PortIndex and $F].Connected;
-end;
-
-//------------------------------------------------------------------------------
-
-procedure TSVCZProcessor.ConnectDevice(PortIndex: TSVCZPortIndex; InHandler,OutHandler: TSVCZPortEvent);
-begin
-fPorts[PortIndex and $F].InHandler := InHandler;
-fPorts[PortIndex and $F].OutHandler := OutHandler;
-fPorts[PortIndex and $F].Connected := True;
-end;
-
-//------------------------------------------------------------------------------
-
-procedure TSVCZProcessor.DisconnectDevice(PortIndex: TSVCZPortIndex);
-begin
-fPorts[PortIndex and $F].InHandler := nil;
-fPorts[PortIndex and $F].OutHandler := nil;
-fPorts[PortIndex and $F].Connected := False;
+Result := Assigned(fPorts[PortIndex and $F].InHandler) and Assigned(fPorts[PortIndex and $F].OutHandler);
 end;
 
 //------------------------------------------------------------------------------
 
 Function TSVCZProcessor.IRQPending(IRQIndex: TSVCZInterruptIndex): Boolean;
 begin
-If SVCZ_IsIRQ(IRQIndex) then
-  Result := fInterrupts[IRQIndex].Counter > 0
+If SVCZ_IsIRQ(IRQIndex and $3F) then
+  Result := fInterrupts[IRQIndex and $3F].Counter > 0
 else
-  raise Exception.CreateFmt('TSVCZProcessor.PendingIRQ: Interrupt index (%d) is not an IRQ.',[IRQIndex]);
+  raise Exception.CreateFmt('TSVCZProcessor.IRQPending: Interrupt index (%d) is not an IRQ.',[IRQIndex]);
 end;
 
 //------------------------------------------------------------------------------
 
 Function TSVCZProcessor.IRQMake(IRQIndex: TSVCZInterruptIndex): Boolean;
 begin
-If SVCZ_IsIRQ(IRQIndex) then
+If SVCZ_IsIRQ(IRQIndex and $3F) then
   begin
-    Result := not IRQPending(IRQIndex);
+    Result := not IRQPending(IRQIndex and $3F);
     If Result then
       begin
-        DispatchInterrupt(IRQIndex,fPorts[SVCZ_IRQToPort(IRQIndex)].Data);
+        DispatchInterrupt(IRQIndex and $3F,fPorts[SVCZ_IRQToPort(IRQIndex)].Data);
         If fState = psWaiting then
           fState := psRunning;
       end;
   end
-else raise Exception.CreateFmt('TSVCZProcessor.MakeIRQ: Interrupt index (%d) is not an IRQ.',[IRQIndex]);
+else raise Exception.CreateFmt('TSVCZProcessor.IRQMake: Interrupt index (%d) is not an IRQ.',[IRQIndex]);
 end;
 
 //------------------------------------------------------------------------------

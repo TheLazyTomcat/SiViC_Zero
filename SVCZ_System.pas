@@ -8,11 +8,13 @@ uses
   SVCZ_Memory, SVCZ_IO, SVCZ_Processor;
 
 type
+  TSVCZIODevices = array[TSVCZPortIndex] of TSVCZIODevice;
+
   TSVCZSystem = class(TObject)
   private
     fMemory:        TSVCZMemory;
     fProcessor:     TSVCZProcessor;
-    fDevices:       array of TSVCZIODevice;
+    fDevices:       TSVCZIODevices;
     fProcCycleMult: Integer;
     Function GetDevice(Index: Integer): TSVCZIODevice;
     Function GetDeviceCount: Integer;
@@ -30,6 +32,7 @@ type
     property Memory: TSVCZMemory read fMemory;
     property Processor: TSVCZProcessor read fProcessor;
     property Devices[Index: Integer]: TSVCZIODevice read GetDevice;
+    // DeviceCount returns length of the array, not actual number of devices
     property DeviceCount: Integer read GetDeviceCount;
     property ProcessorCycleMultiplier: Integer read fProcCycleMult write fProcCycleMult;
   end;

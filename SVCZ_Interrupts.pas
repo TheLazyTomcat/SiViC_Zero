@@ -6,7 +6,7 @@ interface
 
 uses
   SysUtils,
-  SVCZ_Common, SVCZ_IO;
+  SVCZ_Common;
 
 type
   // there is 64 interrupts
@@ -109,9 +109,6 @@ type
 // functions for interrupt management
 Function SVCZ_IsIRQ(InterruptIndex: TSVCZInterruptIndex): Boolean;{$IFDEF CanInline} inline;{$ENDIF}
 
-Function SVCZ_IRQToPort(InterruptIndex: TSVCZInterruptIndex): TSVCZPortIndex;{$IFDEF CanInline} inline;{$ENDIF}
-Function SVCZ_PortToIRQ(PortIndex: TSVCZPortIndex): TSVCZInterruptIndex;{$IFDEF CanInline} inline;{$ENDIF}
-
 implementation
 
 constructor ESVCZQuietInternalException.Create;
@@ -135,18 +132,5 @@ begin
 Result := (InterruptIndex >= SVCZ_INT_IDX_MINIRQ) and (InterruptIndex <= SVCZ_INT_IDX_MAXIRQ);
 end;
 
-//------------------------------------------------------------------------------
-
-Function SVCZ_IRQToPort(InterruptIndex: TSVCZInterruptIndex): TSVCZPortIndex;
-begin
-Result := (InterruptIndex and $3F) - SVCZ_INT_IDX_MINIRQ;
-end;
-
-//------------------------------------------------------------------------------
-
-Function SVCZ_PortToIRQ(PortIndex: TSVCZPortIndex): TSVCZInterruptIndex;
-begin
-Result := SVCZ_INT_IDX_MINIRQ + (PortIndex and $F);
-end;
 
 end.
