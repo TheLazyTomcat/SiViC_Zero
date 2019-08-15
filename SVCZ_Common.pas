@@ -48,6 +48,7 @@ Function SVCZ_MinNum(A,B: TSVCZNumber): TSVCZNumber;{$IFDEF CanInline} inline;{$
 Function SVCZ_Parity(Value: TSVCZNative): Boolean;
 
 Function SVCZ_BoolToNum(Val: Boolean): TSVCZNumber;{$IFDEF CanInline} inline;{$ENDIF}
+Function SVCZ_NumToBool(Val: TSVCZNumber): Boolean;{$IFDEF CanInline} inline;{$ENDIF}
 
 Function SVCZ_ValueBytes(IntSize: TSVCZIntSize): TSVCZNumber;
 
@@ -76,6 +77,13 @@ Function SVCZ_BoolToNum(Val: Boolean): TSVCZNumber;
 begin
 If Val then Result := 1
   else Result := 0;
+end;
+
+//------------------------------------------------------------------------------
+
+Function SVCZ_NumToBool(Val: TSVCZNumber): Boolean;
+begin
+Result := Val <> 0;
 end;
 
 //------------------------------------------------------------------------------
